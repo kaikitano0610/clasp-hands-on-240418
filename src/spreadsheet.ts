@@ -1,5 +1,5 @@
 // データが格納されているシートのヘッダー情報
-export const columnHeader = ['date', 'time','message', 'user_id'] as const
+export const columnHeader = ['user_id', 'status','tags', 'task_content'] as const
 type ColumnHeader = typeof columnHeader[number]
 // ヘッダーの情報と列数のマッピング
 type ColumnHeaderIndexMap = Record<ColumnHeader, number>
