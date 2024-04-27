@@ -30,63 +30,115 @@ const execute = (event: any) => {
       const text = event.message.text
       // 「登録」で始まるメッセージの場合、リマインドメッセージを登録する
       const matchResult = text.match(/^登録/)
+      const matchResult2 = text.match(/^タスクを追加/)
+      const matchResult3 = text.match(/^タグ/)
       if (matchResult && matchResult.input === text) {
-        add(text, REPLY_TOKEN, USER_ID)
+        //add(text, REPLY_TOKEN, USER_ID)
+      } else if (matchResult2 && matchResult2.input === text) {
+        add_tasks(text, REPLY_TOKEN, USER_ID)
+      } else if (matchResult3 && matchResult3.input === text) {
+        save_tags(text, REPLY_TOKEN, USER_ID)
       } else {
-        sendError(REPLY_TOKEN)
+        add_tags(text, REPLY_TOKEN, USER_ID)
       }
     }
   }
 }
 
-/**
- * リマインドメッセージをスプレッドシートに登録する
- */
-const add = (text: string, replyToken: string, userId: string): void => {
+const save_tags = (text: string, replyToken: string, userId: string): void => {
   // 登録 <日付(月/日)> <メッセージ>の形式であることを確認する
-  const reg = /^登録 (\d{1,2}\/\d{1,2}) (\d{1,2}:\d{2}) (.+)$/
-  const validate = reg.test(text)
-  if (!validate) {
-    sendError(replyToken)
-    return
-  }
-  const match = text.match(reg)
-  // 日付と時刻を取得
-  const dateStr = match?.[1] ?? ''
-  const timeStr = match?.[2] ?? ''
-  const messageContent = match?.[3] ??''
-  const dateTime = new Date(`${dateStr} ${timeStr}`);
-
-  // 有効な日付であることを確認する, 空文字もここで弾けるはず
-  if (isNaN(dateTime.getTime())) {
-    sendError(replyToken)
-    return
-  }
-  // スプレッドシートを開く
-  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet()
-  const sheet = activeSpreadsheet.getSheetByName('シート1')
-  if (!sheet) {
-    throw new Error('sheet not found')
-  }
-
-  // 列のインデックスを取得
-  const columnIndexMap = getColumnIndexMap(sheet)
-  // 新しい行を作成して書き込む
-  const newRow: Row = Array.from({ length: columnHeader.length }, () => '')
-  newRow[columnIndexMap.date] = dateStr
-  newRow[columnIndexMap.time] = timeStr
-  newRow[columnIndexMap.message] = messageContent
-  newRow[columnIndexMap.user_id] = userId
-  sheet.appendRow(newRow)
-  // 登録完了メッセージを送信する
   const messages = [
     {
       type: 'text',
-      text: '登録しました',
+      text: 'タグ「'+text+'」タスク「」で登録しました',
     },
   ]
   sendReplyMessage(replyToken, messages)
 }
+
+const add_tasks = (text: string, replyToken: string, userId: string): void => {
+  // 登録 <日付(月/日)> <メッセージ>の形式であることを確認する
+  const messages = [
+    {
+      type: 'text',
+      text: 'タスク内容を入力してください',
+    },
+  ]
+  sendReplyMessage(replyToken, messages)
+}
+
+/**
+ * リマインドメッセージをスプレッドシートに登録する
+ */
+const add_tags = (text: string, replyToken: string, userId: string): void => {
+  // 登録 <日付(月/日)> <メッセージ>の形式であることを確認する
+
+  // スプレッドシートを開く
+  // const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+  // const sheet = activeSpreadsheet.getSheetByName('シート1')
+  // if (!sheet) {
+  //   throw new Error('sheet not found')
+  // }
+
+  // 列のインデックスを取得
+  // const columnIndexMap = getColumnIndexMap(sheet)
+  // // 新しい行を作成して書き込む
+  // const newRow: Row = Array.from({ length: columnHeader.length }, () => '')
+  // newRow[columnIndexMap.date] = dateStr
+  // newRow[columnIndexMap.time] = timeStr
+  // newRow[columnIndexMap.message] = messageContent
+  // newRow[columnIndexMap.user_id] = userId
+  // sheet.appendRow(newRow)
+  // タグの生成
+  const message = [
+    {
+      "type": "text", // 1
+      "text": "タグを選択してください。",
+      "quickReply": { // 2
+        "items": [
+          {
+            "type": "action", // 3
+            "action": {
+              "type": "message",
+              "label": "AIにおまかせ",
+              "text": "AIにおまかせ"
+            }
+          },
+          {
+            "type": "action", 
+            "action": {
+              "type": "message",
+              "label": "仕事",
+              "text": "仕事"
+            }
+          },
+          {
+            "type": "action",
+            "action": {
+              "type": "message",
+              "label": "家事",
+              "text": "家事"
+            }
+          },
+          {
+            "type": "action",
+            "action": {
+              "type": "message",
+              "label": "タグを新しく追加",
+              "text": "タグを新しく追加"
+            }
+          },
+        ]
+      }
+    }
+    
+  ]
+  sendReplyMessage(replyToken, message)
+}
+
+// タスクを確認
+
+
 
 /**
  * リマインドメッセージを送信する

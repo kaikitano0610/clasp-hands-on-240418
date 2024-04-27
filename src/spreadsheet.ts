@@ -29,3 +29,4 @@ export const getColumnIndexMap = (
 }
 // シート1行分の情報
 export type Row = string[]
+
