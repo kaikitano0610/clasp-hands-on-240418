@@ -1,5 +1,6 @@
 import { columnHeader, getColumnIndexMap, Row } from './spreadsheet'
 import { Message, sendPushMessage, sendReplyMessage } from './line'
+import { Configuration, OpenAIApi } from "openai"
 
 export const main = () => {
   console.log('🐛 debug : テスト')
@@ -63,6 +64,9 @@ const execute = (event: any) => {
     else if (lastStatus === "1" || lastStatus === "3" && (lastStatus !== "6")) {
       add_tags(text, REPLY_TOKEN, USER_ID);
     } 
+    else if (lastStatus === "2" && text.match(/^AIにおまかせ/) ){
+      chatGPT_suggest_tag(text, REPLY_TOKEN, USER_ID);
+    }
     // 最後のステータスが2の場合にsave_tagsを実行
     else if (lastStatus === "2") {
       save_tags(text, REPLY_TOKEN, USER_ID);
@@ -90,6 +94,57 @@ function sendError(replyToken: string, errorMessage: string) {
   sendReplyMessage(replyToken, [message]);
 }
 
+const chatGPT_suggest_tag = (text: string, replyToken: string, userId: string): void => {
+
+  const chat_status = 3
+
+  
+  // スプレッドシートを開く
+  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet2 = activeSpreadsheet.getSheetByName('シート2');
+  const sheet3 = activeSpreadsheet.getSheetByName('シート3');
+  if (!sheet2 || !sheet3) {
+    throw new Error('sheet not found');
+  }
+
+  // 列のインデックスを取得
+  const columnIndexMap = getColumnIndexMap(sheet2);
+
+  // シート2から条件に合うtask_contentを検索する
+  const rows = sheet2.getDataRange().getValues(); // シート2の全データを取得
+  let lastTaskContent = ""; // 最後尾のtask_contentを保持する変数
+  for (let i = rows.length - 1; i >= 0; i--) { // 逆順にループして最新の行を探す
+    const row = rows[i];
+    if (row[columnIndexMap.user_id] === userId && Number(row[columnIndexMap.status]) === 2) {
+      lastTaskContent = row[columnIndexMap.task_content];
+      break;
+    }
+  }
+
+  const Response= GPT(lastTaskContent)
+  const chat_tags =  Response.choices[0].message.map(msg => msg.content);
+
+
+  // 新しい行を作成してシート2に書き込む
+  const newRow = Array.from({ length: columnHeader.length }, () => '');
+  newRow[columnIndexMap.user_id] = userId;
+  newRow[columnIndexMap.status] = chat_status.toString();
+  newRow[columnIndexMap.tags] = chat_tags;
+  newRow[columnIndexMap.task_content] = lastTaskContent;
+  sheet2.appendRow(newRow);
+
+  // 作成した行をシート3にもコピー
+  sheet3.appendRow(newRow);
+
+
+  const messages = [
+    {
+      type: 'text',
+      text: 'タグ「'+chat_tags+'」タスク「'+ lastTaskContent +'」で登録しました',
+    },
+  ]
+  sendReplyMessage(replyToken, messages)
+}
 
 // 以下タスク追加のロジック
 const save_tags = (text: string, replyToken: string, userId: string): void => {
@@ -418,7 +473,27 @@ const edit_tags = (text: string, replyToken: string, userId: string): void => {
   sendReplyMessage(replyToken, message)
 }
 
+const GPT = ( async (lastTaskContent: string) => {
+  // 手順 2 で取得した API キーを設定する
+  const configuration = new Configuration({ apiKey: process.env.OPENAI_API_KEY })
+  // OpenAI のクライアントを初期化する
+  const openai = new OpenAIApi(configuration)
 
+  // リクエストを送信
+  const response = await openai.createChatCompletion({
+    // 今回は言語モデル GPT 3.5 を使用する
+    model: "gpt-3.5-turbo",
+    // messages には ChatGPT に送信したい会話の内容を含める
+    messages: [
+      { role: "system", content: "与えたタスクに簡潔なタグをつけてください。出力するときはタグのみを出力してください" },
+      { role: "user", content: lastTaskContent },
+      { role: "assistant", content: "例:入力「プレゼンの資料作成」→出力「仕事」,入力「掃除機をかける」→出力「家事」,入力「あの業務には方法Aを適用した方がいいかも」→出力「アイデア」" },
+
+    ],
+  })
+
+  return response
+})
 
 /**
  * リマインドメッセージを送信する
